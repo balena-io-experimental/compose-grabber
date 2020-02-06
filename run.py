@@ -1,7 +1,7 @@
 import config
 import hashlib
 import urllib.request as urllib2
-from github import Github
+from github import Github,GithubException
 from pathlib import Path
 
 g = Github(config.key)
@@ -42,6 +42,8 @@ def hash(remote, algorithm="md5"):
 	return hash.hexdigest()
 
 if __name__ == '__main__':
+    target_file = 'docker-compose.yml'
+    
     with open('project-list.txt') as f:
         projects = f.read().splitlines()
     
@@ -54,32 +56,64 @@ if __name__ == '__main__':
         release_count = repo.get_tags().totalCount
         print(repo.name + ": " + str(release_count) + " releases")
         
-        if release_count == 0:
-            continue
-            
         file_sha = ''
         start_version = ''
         
-        for tag in repo.get_tags():
-            file = repo.get_contents('docker-compose.yml', tag.name)
+        if release_count > 0:
+            print("using tags")
+            
+            for tag in repo.get_tags():
+                file = repo.get_contents(target_file, tag.name)
 
-            if start_version == '':
+                if start_version == '':
+                    start_version = tag.name
+                    file_sha = file.sha
+                    continue
+                    
+                if file_sha == file.sha:
+                    continue
+                
+                # file_hash = get_remote_hash(file.download_url, "sha1")
+                output_version_range = tag.name + "-" + start_version
+                print_output(output_version_range, file_sha)
+                download_file(file.download_url, output_path + output_version_range)
+                
                 start_version = tag.name
                 file_sha = file.sha
-                continue
                 
-            if file_sha == file.sha:
-                continue
-            
-            # file_hash = get_remote_hash(file.download_url, "sha1")
             output_version_range = tag.name + "-" + start_version
+            output_version_range = output_version_range.strip('-')
             print_output(output_version_range, file_sha)
             download_file(file.download_url, output_path + output_version_range)
             
-            start_version = tag.name
-            file_sha = file.sha
+        else:
+            # work from commits instead of tags
+            print("using commits")
             
-        output_version_range = tag.name + "-" + start_version
-        output_version_range = output_version_range.strip('-')
-        print_output(output_version_range, file_sha)
-        download_file(file.download_url, output_path + output_version_range)
+            for commit in repo.get_commits():
+                try:
+                    file = repo.get_contents(target_file, commit.sha)
+                except GithubException as exception:
+                    if exception.status == 404:
+                        continue
+                
+                if start_version == '':
+                    start_version = commit.sha
+                    file_sha = file.sha
+                    continue
+                    
+                if file_sha == file.sha:
+                    continue
+
+                # file_hash = get_remote_hash(file.download_url, "sha1")
+                output_version_range = commit.sha + "-" + str(start_version)
+                print_output(output_version_range, file_sha)
+                download_file(file.download_url, output_path + output_version_range)
+
+                start_version = commit.sha
+                file_sha = file.sha
+
+            output_version_range = commit.sha + "-" + start_version
+            output_version_range = output_version_range.strip('-')
+            print_output(output_version_range, file_sha)
+            download_file(file.download_url, output_path + output_version_range)

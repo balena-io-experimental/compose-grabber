@@ -2,3 +2,5 @@ balenalabs/balena-sound
 balenalabs/balena-sense
 balenalabs/balena-dash
 balenalabs/balena-cam
+klutchell/balena-pihole
+balena-io-playground/fadecandy-led-controller
